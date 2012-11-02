@@ -16,14 +16,18 @@ NGram.prototype.get = function(index){
     return this.keys[index];
 }
 NGram.prototype.backoff = function(){
-    if (keys.length<=1) return null;
-    return new NGram(this.keys.slice(1,this.keys.length));
+    if (this.keys.length<=1) return null;
+    var clone = this.keys.slice(0);
+    return new NGram(clone.slice(1,this.keys.length));
 }
 NGram.prototype.history = function(){
-    return new NGram(this.keys.slice(0,this.keys.length-1));
+    var clone = this.keys.slice(0);
+    return new NGram(clone.slice(0,this.keys.length-1));
 }
 NGram.prototype.add = function(key){
-    return new NGram(this.keys.splice(this.keys.length,0,key));
+    var clone = this.keys.slice(0);
+    clone.push(key);
+    return new NGram(clone);
 }
 NGram.prototype.hash = function(){
     // 23/37
@@ -167,9 +171,9 @@ KneserNeyModFixModel2.prototype.calcNGramProbability = function(ngram, den){
         var count = this.orderToNGramCounter.get(0)[ngram.hash()].count;
         return count / this.sumUnigrams;
     }
-    var count = this.orderToNGramCounter.get(ngram.keys.length-1)[ngram.hash()].count;
-    if (!count) return 0.0;
-    return (count - this.getD(ngram.keys.length-1),count) / den;
+    var ng = this.orderToNGramCounter.get(ngram.keys.length-1)[ngram.hash()];
+    if (!ng || !ng.count) return 0.0;
+    return (ng.count - this.getD(ngram.keys.length-1,ng.count)) / den;
 }
 KneserNeyModFixModel2.prototype.getIntermediateValues = function(history){
     var historyHash = history.hash();
@@ -181,8 +185,9 @@ KneserNeyModFixModel2.prototype.getIntermediateValues = function(history){
         var ngramList = this.historyToNGramMap[historyHash];
         if (ngramList){
             var ngramCounter = this.orderToNGramCounter.get(history.keys.length-1);
-            ngramList.forEach(function(ng){
-                var count = ngramCounter[ng.hash()].count;
+            for (var k in ngramCounter){
+                var counter = ngramCounter[k];
+                var count = counter.count;
                 cc.den += count;
                 if (count==1)
                     cc.Nc[0]++;
@@ -190,7 +195,7 @@ KneserNeyModFixModel2.prototype.getIntermediateValues = function(history){
                     cc.Nc[1]++;
                 else if (count > 2)
                     cc.Nc[2]++;
-            }, this);
+            }
             this.historyToIntermediateValueCache[historyHash] = cc;
         }
     }
@@ -213,7 +218,7 @@ KneserNeyModFixModel2.prototype.logProbability = function(ngram){
 KneserNeyModFixModel2.prototype.calcBackoff = function(){
 
     var backoffModel = {logbase:this.logbase};
-    var order = this.orderToNGramCounter.length;
+    var order = this.orderToNGramCounter.order;
     if (order==1){
         var highOrderNGrams = {};
         var model = this.orderToNGramCounter.get(0);
@@ -230,9 +235,9 @@ KneserNeyModFixModel2.prototype.calcBackoff = function(){
     var highOrderNGrams = {};
     for (var o=0; o<order;o++){
         var ngramToPB = {};
-        var model = this.orderToNGramCounter(o);
+        var model = this.orderToNGramCounter.get(o);
         for (var k in model){
-            var ngram = model[k];
+            var ngram = model[k].ngram;
             ngramToPB[k] = {ngram:ngram, probability:this.recurseNGramProbability(ngram)};
         }
         if (o==order-1) highOrderNGrams = ngramToPB;
@@ -241,16 +246,19 @@ KneserNeyModFixModel2.prototype.calcBackoff = function(){
 
     // calculate backoff weights
     for (var o=1; o<order;o++){
-        var model = this.orderToNGramCounter(o);
+        var model = this.orderToNGramCounter.get(o);
         for (var k in model){
-            var ngram = model[k];
+            var counter = model[k];
+            var ngram = counter.ngram;
             var history = ngram.history();
             var ngpb = lowerOrderNGrams[o-1][history.hash()];
             if (!ngpb || ngpb.backoff) continue;
 
             var probLeftover = 1.0;
             var expandHistory = this.historyToNGramMap[history.hash()];
-            for (var ngramWithHistory in expandHistory){
+
+            for (var i= 0; i<expandHistory.length;i++){
+                var ngramWithHistory = expandHistory[i];
                 if (o==order-1){
                     probLeftover -= highOrderNGrams[ngramWithHistory.hash()].probability;
                 } else {
@@ -261,7 +269,8 @@ KneserNeyModFixModel2.prototype.calcBackoff = function(){
             var probToDistribute = 0.0;
             var unigrams = lowerOrderNGrams[0];
             for (var k in unigrams){
-                var unigram = unigrams[k];
+                var unigramCounter = unigrams[k];
+                var unigram = unigramCounter.ngram;
                 var toAdd = true;
                 for (var kk in expandHistory){
                     var expandHistoryNGram = expandHistory[kk];
@@ -291,9 +300,10 @@ KneserNeyModFixModel2.prototype.calcBackoff = function(){
 
     // bookkeeping to set NaN backoffs to 0.
     for (var o=1; o<order-1;o++){
-        var model = this.orderToNGramCounter(o);
+        var model = this.orderToNGramCounter.get(o);
         for (var k in model){
-            var ngram = model[k];
+            var counter = model[k];
+            var ngram = counter.ngram;
             var history = ngram.history();
             var ngpb = lowerOrderNGrams[o-1][history.hash()];
             // log base 10
@@ -308,7 +318,7 @@ KneserNeyModFixModel2.prototype.calcBackoff = function(){
 
     // now do the high order
     for (var k in highOrderNGrams){
-        var ngp = model[k];
+        var ngp = highOrderNGrams[k];
         ngp.probability = Math.log(ngp.probability) / Math.log(this.logbase);
     }
     backoffModel.highOrderNGrams = highOrderNGrams;
@@ -322,11 +332,16 @@ ngcm.populate(training[0]);
 ngcm.populate(training[1]);
 ngcm.populate(training[2]);
 var cc = ngcm.countOfCounts(0);
-console.log(cc);
+//console.log(cc);
 //console.log(cc.get(4));
 //console.log(cc.get(3));
-console.log(ngcm.countOfCounts(1));
-console.log(ngcm.countOfCounts(2));
+//console.log(ngcm.countOfCounts(1));
+//console.log(ngcm.countOfCounts(2));
+
+var testng = new NGram([1,2,3]);
+console.log(testng);
+console.log(testng.backoff());
+console.log(testng.add(4));
 
 var kn = new KneserNeyModFixModel2(10,ngcm);
 
