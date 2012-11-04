@@ -3,64 +3,6 @@ var natural = require('natural'),
     ngrams = natural.NGrams,
     wordnet = new natural.WordNet();
 
-var training = [
-    'John read Moby Dick',
-    'Mary read a different book',
-    'I read a magazine by Kristin',
-    'I read a magazine on the plane',
-    'Bob read a different one',
-    'Mary read a different one',
-    'I read a book by Kristin',
-    'She read a tome',
-    'She read a book by JP',
-    'She read a book by JP',
-    'She read a book by JP',
-    'She read a book by JP',
-    'She read a book by JP',
-    'She read a book by JP',
-    'She read a book by me',
-    'She read a book by me',
-    'She read a book by me',
-    'She read a book by me',
-    'She read a book by me',
-    'She read a book by me',
-    'She read a book by me',
-    'She read a book by me',
-    'She read a book by me',
-    'She read a book by me',
-    'She read a book by me',
-    'She read a book by me',
-    'She read a book by me',
-    'She read a book by me',
-    'She read a book by me',
-    'She read a book by me',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read a book by John',
-    'She read two books by me',
-    'She read three books',
-    'She read two books by Cher'
-];
 
 var NGram = function(keys){
     this.keys = keys;
@@ -188,19 +130,17 @@ var KneserNeyModFixModel2 = function(logbase, model){
         var coc = model.countOfCounts(o);
         var n1 = coc.get(1) | 1, n2 = coc.get(2), n3 = coc.get(3), n4 = coc.get(4);
 
+//////// start of my hack - KN doesn't work well on small sample sizes, adjusting these to avoid /0 errors ////
         if (!n1) n1 = 1;
         if (!n2) n2 = 1;
         if (!n3) n3 = 1;
         if (!n4) n4 = 1;
+//////// end of my hack - no idea what effect this has on smoothing, but as training text size increases effect should disappear
 
         // my hack
         var dis1 = ((2.0*n1*n2)/((n1+2.0*n2)*n1));
         var dis2 = ((3.0*n1*n3)/((n1+2.0*n2)*n2));
         var dis3 = ((4.0*n1*n4)/((n1+2.0*n2)*n3));
-
-//        if (!dis1) dis1 = 1e-6;
-//        if (!dis2) dis2 = 1e-6;
-//        if (!dis3) dis3 = 1e-6;
 
         this.d1.push(1.0 - dis1);
         this.d2.push(2.0 - dis2);
@@ -342,7 +282,6 @@ KneserNeyModFixModel2.prototype.calcBackoff = function(){
                 for (var kk in expandHistory){
                     var expandHistoryNGram = expandHistory[kk];
                     // if unigram's key equals the last key of the ngrams with history
-                    //TODO: why is he using unigram.last or unigram.first - there should only be one, its a unigram??
                     if (unigram.keys[0] == expandHistoryNGram.keys[expandHistoryNGram.keys.length-1]){
                         toAdd = false;
                         break;
@@ -351,7 +290,6 @@ KneserNeyModFixModel2.prototype.calcBackoff = function(){
                         if (history.keys.length == 1){
                             probToDistribute += this.recurseNGramProbability(unigram);
                         } else {
-                            // TODO:  this one tries to use unigram.getFirst() - once again, only one key in a unigram, why the getFirst, getLast calls??
                             probToDistribute += this.recurseNGramProbability(history.backoff().add(unigram.keys[0]))
                         }
                     }
@@ -391,21 +329,34 @@ KneserNeyModFixModel2.prototype.calcBackoff = function(){
 
 }
 //testing
+
+var training = [
+    'John read Moby Dick',
+    'Mary read a different book',
+    'I read a magazine by Kristin and it was really really good',
+    'I read a magazine on the plane because I was bored',
+    'Bob read a different one that was more interesting',
+    'Mary read a different one that was sort of boring',
+    'I read a book by Kristin who had written one before by the way',
+    'She read a tome',
+    'She read a book by JP',
+    'She read a book by me',
+    'She read a book by John',
+    'She read two books by me',
+    'She read three books',
+    'She read two books by Cher'
+];
+
 var ngcm = new NGramCountModel(3);
 for (var t=0;t<training.length;t++) ngcm.populate(training[t]);
 var cc = ngcm.countOfCounts(0);
-//console.log(cc);
-//console.log(cc.get(4));
-//console.log(cc.get(3));
-//console.log(ngcm.countOfCounts(1));
-//console.log(ngcm.countOfCounts(2));
 
 var kn = new KneserNeyModFixModel2(10,ngcm);
-
-
 var backoff = kn.calcBackoff();
 
-var test = new NGram([ngcm.index['read'], ngcm.index['a']]);
+var keys = [];
+for (var arg=2;arg<process.argv.length;arg++) keys.push(ngcm.index[process.argv[arg]]);
+var test = new NGram(keys);
 console.log('test',test);
 
 var printWords = function(ngram, index){
@@ -421,15 +372,17 @@ var printWords = function(ngram, index){
 }
 
 var options = [];
-for (var k in backoff.highOrderNGrams){
-    if (backoff.highOrderNGrams[k].ngram.history().hash()== test.hash()){
-        options.push(backoff.highOrderNGrams[k]);
+if (keys.length == 2){
+    for (var k in backoff.highOrderNGrams){
+        if (backoff.highOrderNGrams[k].ngram.history().hash()== test.hash()){
+            options.push(backoff.highOrderNGrams[k]);
+        }
     }
-}
-
-for (var j in backoff.lowerOrderNGrams[1]){
-    if (backoff.lowerOrderNGrams[1][j].ngram.history().hash()== test.backoff().hash()){
-        console.log('\tmatch2:',printWords(backoff.lowerOrderNGrams[1][j].ngram, ngcm.index),backoff.lowerOrderNGrams[1][j].probability);
+} else {
+    for (var j in backoff.lowerOrderNGrams[1]){
+        if (backoff.lowerOrderNGrams[1][j].ngram.history().hash()== test.hash()){
+            options.push(backoff.lowerOrderNGrams[1][j]);
+        }
     }
 }
 
@@ -438,6 +391,6 @@ options.sort(function(a,b){
 })
 
 options.forEach(function(item){
-    console.log('\tmatch3:',printWords(item.ngram, ngcm.index),item.probability);
+    console.log('\tmatch:',printWords(item.ngram, ngcm.index),item.probability);
 });
 
