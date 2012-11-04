@@ -6,7 +6,60 @@ var natural = require('natural'),
 var training = [
     'John read Moby Dick',
     'Mary read a different book',
-    'She read a book by Cher'
+    'I read a magazine by Kristin',
+    'I read a magazine on the plane',
+    'Bob read a different one',
+    'Mary read a different one',
+    'I read a book by Kristin',
+    'She read a tome',
+    'She read a book by JP',
+    'She read a book by JP',
+    'She read a book by JP',
+    'She read a book by JP',
+    'She read a book by JP',
+    'She read a book by JP',
+    'She read a book by me',
+    'She read a book by me',
+    'She read a book by me',
+    'She read a book by me',
+    'She read a book by me',
+    'She read a book by me',
+    'She read a book by me',
+    'She read a book by me',
+    'She read a book by me',
+    'She read a book by me',
+    'She read a book by me',
+    'She read a book by me',
+    'She read a book by me',
+    'She read a book by me',
+    'She read a book by me',
+    'She read a book by me',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read a book by John',
+    'She read two books by me',
+    'She read three books',
+    'She read two books by Cher'
 ];
 
 var NGram = function(keys){
@@ -133,11 +186,25 @@ var KneserNeyModFixModel2 = function(logbase, model){
 
         var ngs = model.get(o);
         var coc = model.countOfCounts(o);
-        var n1 = coc.get(1), n2 = coc.get(2), n3 = coc.get(3), n4 = coc.get(4);
-        this.d1.push(1.0 - ((2.0*n1*n2)/((n1+2.0*n2)*n1)));
-        this.d2.push(2.0 - ((3.0*n1*n3)/((n1+2.0*n2)*n2)));
-        this.d3p.push(3.0 - ((4.0*n1*n4)/((n1+2.0*n2)*n3)));
+        var n1 = coc.get(1) | 1, n2 = coc.get(2), n3 = coc.get(3), n4 = coc.get(4);
 
+        if (!n1) n1 = 1;
+        if (!n2) n2 = 1;
+        if (!n3) n3 = 1;
+        if (!n4) n4 = 1;
+
+        // my hack
+        var dis1 = ((2.0*n1*n2)/((n1+2.0*n2)*n1));
+        var dis2 = ((3.0*n1*n3)/((n1+2.0*n2)*n2));
+        var dis3 = ((4.0*n1*n4)/((n1+2.0*n2)*n3));
+
+//        if (!dis1) dis1 = 1e-6;
+//        if (!dis2) dis2 = 1e-6;
+//        if (!dis3) dis3 = 1e-6;
+
+        this.d1.push(1.0 - dis1);
+        this.d2.push(2.0 - dis2);
+        this.d3p.push(3.0 - dis3);
 
         // get a historymap going
         for (var k in ngs){
@@ -155,7 +222,7 @@ KneserNeyModFixModel2.prototype.getD = function(order, count){
     if (count==0) return 0.0;
     if (count==1) return this.d1[order];
     if (count==2) return this.d2[order];
-    return this.d3p[count];
+    return this.d3p[order];
 
 }
 KneserNeyModFixModel2.prototype.calcGamma = function(history, den, Nc){
@@ -299,13 +366,10 @@ KneserNeyModFixModel2.prototype.calcBackoff = function(){
     }
 
     // bookkeeping to set NaN backoffs to 0.
-    for (var o=1; o<order-1;o++){
-        var model = this.orderToNGramCounter.get(o);
+    for (var o=0; o<lowerOrderNGrams.length;o++){
+        var model = lowerOrderNGrams[o];
         for (var k in model){
-            var counter = model[k];
-            var ngram = counter.ngram;
-            var history = ngram.history();
-            var ngpb = lowerOrderNGrams[o-1][history.hash()];
+            var ngpb = model[k];
             // log base 10
             ngpb.probability = Math.log(ngpb.probability) / Math.log(this.logbase);
             if (Number.NaN == ngpb.backoff){
@@ -328,9 +392,7 @@ KneserNeyModFixModel2.prototype.calcBackoff = function(){
 }
 //testing
 var ngcm = new NGramCountModel(3);
-ngcm.populate(training[0]);
-ngcm.populate(training[1]);
-ngcm.populate(training[2]);
+for (var t=0;t<training.length;t++) ngcm.populate(training[t]);
 var cc = ngcm.countOfCounts(0);
 //console.log(cc);
 //console.log(cc.get(4));
@@ -338,17 +400,44 @@ var cc = ngcm.countOfCounts(0);
 //console.log(ngcm.countOfCounts(1));
 //console.log(ngcm.countOfCounts(2));
 
-var testng = new NGram([1,2,3]);
-console.log(testng);
-console.log(testng.backoff());
-console.log(testng.add(4));
-
 var kn = new KneserNeyModFixModel2(10,ngcm);
 
-console.log('d1', kn.d1);
-console.log('d2', kn.d2);
-console.log('d3p', kn.d3p);
-console.log('historyToNGramMap', kn.historyToNGramMap);
-console.log('sumUnigrams', kn.sumUnigrams);
 
-console.log('backoffModel',kn.calcBackoff());
+var backoff = kn.calcBackoff();
+
+var test = new NGram([ngcm.index['read'], ngcm.index['a']]);
+console.log('test',test);
+
+var printWords = function(ngram, index){
+    var str = '';
+    var id = ngram.keys[ngram.keys.length-1];
+    for (var k in index){
+        if (index[k] == id){
+            str += k+' ';
+            break;
+        }
+    }
+    return str;
+}
+
+var options = [];
+for (var k in backoff.highOrderNGrams){
+    if (backoff.highOrderNGrams[k].ngram.history().hash()== test.hash()){
+        options.push(backoff.highOrderNGrams[k]);
+    }
+}
+
+for (var j in backoff.lowerOrderNGrams[1]){
+    if (backoff.lowerOrderNGrams[1][j].ngram.history().hash()== test.backoff().hash()){
+        console.log('\tmatch2:',printWords(backoff.lowerOrderNGrams[1][j].ngram, ngcm.index),backoff.lowerOrderNGrams[1][j].probability);
+    }
+}
+
+options.sort(function(a,b){
+    return b.probability- a.probability;
+})
+
+options.forEach(function(item){
+    console.log('\tmatch3:',printWords(item.ngram, ngcm.index),item.probability);
+});
+
