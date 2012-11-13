@@ -1,2 +1,0 @@
-A port of Brian Romanowski's Java-based open source Kneser-Ney language model, according to Chen and Goodman's kneser-ney-mod-fix
-description, to nodejs using the 'natural' npm package.
