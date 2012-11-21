@@ -49,6 +49,7 @@ if (!found){
     console.log('input ngram: ',words,' not found in training model');
     return;
 }
+if (keys.length==0) keys.push(ngcm.index[NGramCountModel.START]);
 
 var test = new NGram(keys);
 console.log('input ngram: ',words, ' hash=',test.hash());
