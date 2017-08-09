@@ -1,9 +1,9 @@
-#KN
+# KN
 
     A port of Brian Romanowski's Java-based open source Kneser-Ney language model, according to Chen and Goodman's kneser-ney-mod-fix
     description, to nodejs using the 'natural' npm package.
 
-##Usage [usage]
+## Usage [usage]
 
     var kn = require('../lib/kn'),
         _ = require('underscore'),
@@ -40,7 +40,7 @@
         console.log('\tmatch:',printWords(backoff.highOrderNGrams[h]));
     });
 
-##Note
+## Note
 
     Brian Romanowski's Copyright on the Java version from which this was adapted
 
